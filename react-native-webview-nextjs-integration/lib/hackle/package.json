@@ -1,0 +1,8 @@
+{
+  "name": "hackle-js-bridge",
+  "version": "1.0.0",
+  "main": "index.esm.min.js",
+  "module": "index.esm.min.js",
+  "types": "types/index.d.ts",
+  "type": "module"
+}
