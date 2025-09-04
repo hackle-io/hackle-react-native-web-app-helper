@@ -7,6 +7,7 @@ interface HackleRequest {
   id: string;
   type: string;
   payload?: any;
+  browserProperties?: Map<string, string>;
 }
 
 interface HackleWebviewManagerReturn {
@@ -86,6 +87,7 @@ export default function useHackleWebviewManager({
       [HACKLE_CONSTANTS.INVOCATION_PREFIX]: {
         command: request.type,
         parameters: request.payload ?? null,
+        browserProperties: request.browserProperties ?? null,
       },
     });
   };
