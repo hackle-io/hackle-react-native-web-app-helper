@@ -135,9 +135,19 @@ export default function useHackleWebviewManager({
       const request = JSON.parse(data)[HACKLE_CONSTANTS.MESSAGE_PREFIX];
       switch (request.type) {
         case 'getUser':
+          return getUser(request);
         case 'getSessionId':
+          return getSessionId(request);
         case 'variation':
+          return variation(request);
+        case 'variationDetail':
+          return variationDetail(request);
         case 'isFeatureOn':
+          return isFeatureOn(request);
+        case 'featureFlagDetail':
+          return featureFlagDetail(request);
+        case 'remoteConfig':
+          return remoteConfig(request);
         case 'setUser':
         case 'setUserId':
         case 'setDeviceId':
@@ -153,14 +163,7 @@ export default function useHackleWebviewManager({
         case 'fetch':
         case 'track':
           return invokeBridge(request);
-        case 'variationDetail':
-          return variationDetail(request);
-        case 'featureFlagDetail':
-          return featureFlagDetail(request);
-        case 'remoteConfig':
-          return remoteConfig(request);
         default:
-          console.log('unknown type: ', request.type);
           sendMessage(request.id, 'error', 'unknown type');
           return Promise.resolve();
 
@@ -183,56 +186,76 @@ export default function useHackleWebviewManager({
   };
 
   /**
-   * ABTest 상세 정보를 처리하는 함수
+   * Hackle 브릿지를 호출하는 함수
    * @param request - Hackle 요청 객체
+   * @param dataMapper - 성공 시 'result.data'를 'sendMessage' 페이로드로 변환하는 콜백 함수.
    */
+  const invokeBridgeMapper = async (
+      request: HackleRequest,
+      dataMapper: (data: any) => Record<string, any>
+  ): Promise<void> => {
+    try {
+      const invocation = resolveInvocation(request);
+      const json = await hackleClient.bridgeInvoke(invocation);
+      const result = JSON.parse(json);
+
+      if (result.success === false) {
+        return sendMessage(request.id, request.type, result.message);
+      }
+
+      const payload = dataMapper(result.data);
+      sendMessage(request.id, request.type, payload);
+
+    } catch (e: any) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      sendMessage(request.id, request.type, errorMessage);
+    }
+  };
+
+  const getUser = async (request: HackleRequest): Promise<void> => {
+    await invokeBridgeMapper(request, (data) => ({
+      user: data,
+    }));
+  };
+
+  const getSessionId = async (request: HackleRequest): Promise<void> => {
+    await invokeBridgeMapper(request, (data) => ({
+      sessionId: data,
+    }));
+  };
+
+  const variation = async (request: HackleRequest): Promise<void> => {
+    await invokeBridgeMapper(request, (data) => ({
+      variation: data,
+    }));
+  };
+
   const variationDetail = async (request: HackleRequest): Promise<void> => {
-    const invocation = resolveInvocation(request);
-    const json = await hackleClient.bridgeInvoke(invocation);
-    const result = JSON.parse(json);
-    if (result.success === false) {
-      return sendMessage(request.id, request.type, result.message);
-    }
-
-    sendMessage(request.id, request.type, {
-      variation: result.data.variation,
-      parameters: result.data.config.parameters,
-      reason: result.data.reason,
-    });
+    await invokeBridgeMapper(request, (data) => ({
+      variation: data.variation,
+      parameters: data.config.parameters,
+      reason: data.reason,
+    }));
   };
 
-  /**
-   * FeatureFlag 상세 정보를 처리하는 함수
-   * @param request - Hackle 요청 객체
-   */
+  const isFeatureOn = async (request: HackleRequest): Promise<void> => {
+    await invokeBridgeMapper(request, (data) => ({
+      isOn: data
+    }));
+  }
+
   const featureFlagDetail = async (request: HackleRequest): Promise<void> => {
-    const invocation = resolveInvocation(request);
-    const json = await hackleClient.bridgeInvoke(invocation);
-    const result = JSON.parse(json);
-    if (result.success === false) {
-      return sendMessage(request.id, request.type, result.message);
-    }
-
-    sendMessage(request.id, request.type, {
-      isOn: result.data.isOn,
-      parameters: result.data.config.parameters,
-      reason: result.data.reason,
-    });
+    await invokeBridgeMapper(request, (data) => ({
+      isOn: data.isOn,
+      parameters: data.config.parameters,
+      reason: data.reason,
+    }));
   };
 
-  /**
-   * RemoteConfig를 처리하는 함수
-   * @param request - Hackle 요청 객체
-   */
   const remoteConfig = async (request: HackleRequest): Promise<void> => {
-    const invocation = resolveInvocation(request);
-    const json = await hackleClient.bridgeInvoke(invocation);
-    const result = JSON.parse(json);
-    if (result.success === false) {
-      return sendMessage(request.id, request.type, result.message);
-    }
-
-    sendMessage(request.id, request.type, result.data);
+    await invokeBridgeMapper(request, (data) => ({
+      configValue: data
+    }));
   };
 
   return {
