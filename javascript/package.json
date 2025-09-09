@@ -22,6 +22,6 @@
     "typescript": "^5.8.3"
   },
   "peerDependencies": {
-    "@hackler/javascript-sdk": "^11.47.0"
+    "@hackler/javascript-sdk": "^11.48.0"
   }
 }

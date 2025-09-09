@@ -10,11 +10,57 @@ import {
   PageView,
   PropertyOperations,
   User,
+  DefaultBrowserPropertyProvider,
 } from "@hackler/javascript-sdk";
 import { v4 as uuidv4 } from "uuid";
 import WebViewParameterConfig from "./parameter-config";
 import WebViewRemoteConfig from "./remote-config";
 import { HackleClientBase } from "./base";
+
+class HackleMessage {
+  static MESSAGE_FIELD_NAME = "_hackle_message";
+
+  constructor(
+    readonly id: string,
+    readonly type: string,
+    readonly payload: any,
+    readonly browserProperties?: Record<string, string>
+  ) {}
+
+  static parseOrNull(data: any): HackleMessage | null {
+    try {
+      if (HackleMessage.MESSAGE_FIELD_NAME in data) {
+        const { id, type, payload, browserProperties } =
+          data[HackleMessage.MESSAGE_FIELD_NAME];
+        return new HackleMessage(id, type, payload, browserProperties);
+      }
+
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  static from(
+    id: string,
+    type: string,
+    payload: any,
+    browserProperties: Record<string, string>
+  ) {
+    return new HackleMessage(id, type, payload, browserProperties);
+  }
+
+  toDto() {
+    return {
+      [HackleMessage.MESSAGE_FIELD_NAME]: {
+        id: this.id,
+        type: this.type,
+        payload: this.payload,
+        browserProperties: this.browserProperties,
+      },
+    };
+  }
+}
 
 interface Port {
   postMessage(serialized: string): void;
@@ -115,14 +161,13 @@ class HackleWebViewClient
 
       try {
         const data = JSON.parse(event.data);
-        if (this.messageFieldName in data) {
-          const { id, payload } = data[this.messageFieldName];
+        const message = HackleMessage.parseOrNull(data);
+        if (!message) throw new Error("Invalid message");
 
-          if (id) {
-            this.resolverRecord.get(id)?.(payload);
-            this.resolverRecord.delete(id);
-          }
-        }
+        const { id, payload } = message;
+
+        this.resolverRecord.get(id)?.(payload);
+        this.resolverRecord.delete(id);
       } catch (err) {
         console.log(
           `[DEBUG] Hackle: Failed to parse message. If message not sent by hackle, please ignore this. ${err}`
@@ -134,14 +179,14 @@ class HackleWebViewClient
     return Promise.resolve({ success: true });
   }
 
-  private createMessage(id: string, type: string, payload: any) {
-    return JSON.stringify({
-      [this.messageFieldName]: {
-        id,
-        type,
-        payload,
-      },
-    });
+  private getBrowserProperties(): Record<string, string> {
+    const properties =
+      new DefaultBrowserPropertyProvider().getBrowserProperties();
+    return properties as Record<string, string>;
+  }
+
+  private createMessage(request: HackleMessage) {
+    return JSON.stringify(request.toDto());
   }
 
   private createId() {
@@ -154,7 +199,14 @@ class HackleWebViewClient
     const { sessionId } = await promiseWithTimeout<{ sessionId: string }>(
       (resolve) => {
         this.messageTransceiver.port.postMessage(
-          this.createMessage(id, "getSessionId", null)
+          this.createMessage(
+            HackleMessage.from(
+              id,
+              "getSessionId",
+              null,
+              this.getBrowserProperties()
+            )
+          )
         );
         this.resolverRecord.set(id, resolve);
       },
@@ -170,7 +222,9 @@ class HackleWebViewClient
     const { user } = await promiseWithTimeout<{ user: User }>(
       (resolve) => {
         this.messageTransceiver.port.postMessage(
-          this.createMessage(id, "getUser", null)
+          this.createMessage(
+            HackleMessage.from(id, "getUser", null, this.getBrowserProperties())
+          )
         );
         this.resolverRecord.set(id, resolve);
       },
@@ -190,7 +244,14 @@ class HackleWebViewClient
     return promiseWithTimeout<void>(
       (resolve) => {
         this.messageTransceiver.port.postMessage(
-          this.createMessage(id, "setUser", { user })
+          this.createMessage(
+            HackleMessage.from(
+              id,
+              "setUser",
+              { user },
+              this.getBrowserProperties()
+            )
+          )
         );
         this.resolverRecord.set(id, resolve);
       },
@@ -211,7 +272,14 @@ class HackleWebViewClient
         }
 
         this.messageTransceiver.port.postMessage(
-          this.createMessage(id, "setUserId", { userId: resolvedUserId })
+          this.createMessage(
+            HackleMessage.from(
+              id,
+              "setUserId",
+              { userId: resolvedUserId },
+              this.getBrowserProperties()
+            )
+          )
         );
         this.resolverRecord.set(id, resolve);
       },
@@ -227,7 +295,14 @@ class HackleWebViewClient
     return promiseWithTimeout<void>(
       (resolve) => {
         this.messageTransceiver.port.postMessage(
-          this.createMessage(id, "setDeviceId", { deviceId })
+          this.createMessage(
+            HackleMessage.from(
+              id,
+              "setDeviceId",
+              { deviceId },
+              this.getBrowserProperties()
+            )
+          )
         );
         this.resolverRecord.set(id, resolve);
       },
@@ -243,7 +318,14 @@ class HackleWebViewClient
     return promiseWithTimeout<void>(
       (resolve) => {
         this.messageTransceiver.port.postMessage(
-          this.createMessage(id, "setUserProperty", { key, value })
+          this.createMessage(
+            HackleMessage.from(
+              id,
+              "setUserProperty",
+              { key, value },
+              this.getBrowserProperties()
+            )
+          )
         );
         this.resolverRecord.set(id, resolve);
       },
@@ -259,7 +341,14 @@ class HackleWebViewClient
     return promiseWithTimeout<void>(
       (resolve) => {
         this.messageTransceiver.port.postMessage(
-          this.createMessage(id, "setUserProperties", { properties })
+          this.createMessage(
+            HackleMessage.from(
+              id,
+              "setUserProperties",
+              { properties },
+              this.getBrowserProperties()
+            )
+          )
         );
         this.resolverRecord.set(id, resolve);
       },
@@ -275,9 +364,16 @@ class HackleWebViewClient
     return promiseWithTimeout<void>(
       (resolve) => {
         this.messageTransceiver.port.postMessage(
-          this.createMessage(id, "updateUserProperties", {
-            operations: operations.toRecord(),
-          })
+          this.createMessage(
+            HackleMessage.from(
+              id,
+              "updateUserProperties",
+              {
+                operations: operations.toRecord(),
+              },
+              this.getBrowserProperties()
+            )
+          )
         );
 
         this.resolverRecord.set(id, resolve);
@@ -294,9 +390,16 @@ class HackleWebViewClient
     return promiseWithTimeout<void>(
       (resolve) => {
         this.messageTransceiver.port.postMessage(
-          this.createMessage(id, "updatePushSubscriptions", {
-            operations: operations.toRecord(),
-          })
+          this.createMessage(
+            HackleMessage.from(
+              id,
+              "updatePushSubscriptions",
+              {
+                operations: operations.toRecord(),
+              },
+              this.getBrowserProperties()
+            )
+          )
         );
 
         this.resolverRecord.set(id, resolve);
@@ -311,9 +414,16 @@ class HackleWebViewClient
     return promiseWithTimeout<void>(
       (resolve) => {
         this.messageTransceiver.port.postMessage(
-          this.createMessage(id, "updateSmsSubscriptions", {
-            operations: operations.toRecord(),
-          })
+          this.createMessage(
+            HackleMessage.from(
+              id,
+              "updateSmsSubscriptions",
+              {
+                operations: operations.toRecord(),
+              },
+              this.getBrowserProperties()
+            )
+          )
         );
 
         this.resolverRecord.set(id, resolve);
@@ -328,9 +438,16 @@ class HackleWebViewClient
     return promiseWithTimeout<void>(
       (resolve) => {
         this.messageTransceiver.port.postMessage(
-          this.createMessage(id, "updateKakaoSubscriptions", {
-            operations: operations.toRecord(),
-          })
+          this.createMessage(
+            HackleMessage.from(
+              id,
+              "updateKakaoSubscriptions",
+              {
+                operations: operations.toRecord(),
+              },
+              this.getBrowserProperties()
+            )
+          )
         );
 
         this.resolverRecord.set(id, resolve);
@@ -345,7 +462,14 @@ class HackleWebViewClient
     return promiseWithTimeout<void>(
       (resolve) => {
         this.messageTransceiver.port.postMessage(
-          this.createMessage(id, "setPhoneNumber", { phoneNumber })
+          this.createMessage(
+            HackleMessage.from(
+              id,
+              "setPhoneNumber",
+              { phoneNumber },
+              this.getBrowserProperties()
+            )
+          )
         );
         this.resolverRecord.set(id, resolve);
       },
@@ -359,7 +483,14 @@ class HackleWebViewClient
     return promiseWithTimeout<void>(
       (resolve) => {
         this.messageTransceiver.port.postMessage(
-          this.createMessage(id, "unsetPhoneNumber", null)
+          this.createMessage(
+            HackleMessage.from(
+              id,
+              "unsetPhoneNumber",
+              null,
+              this.getBrowserProperties()
+            )
+          )
         );
         this.resolverRecord.set(id, resolve);
       },
@@ -373,7 +504,14 @@ class HackleWebViewClient
     return promiseWithTimeout<void>(
       (resolve) => {
         this.messageTransceiver.port.postMessage(
-          this.createMessage(id, "resetUser", null)
+          this.createMessage(
+            HackleMessage.from(
+              id,
+              "resetUser",
+              null,
+              this.getBrowserProperties()
+            )
+          )
         );
         this.resolverRecord.set(id, resolve);
       },
@@ -389,9 +527,16 @@ class HackleWebViewClient
     const { variation } = await promiseWithTimeout<{ variation: string }>(
       (resolve) => {
         this.messageTransceiver.port.postMessage(
-          this.createMessage(id, "variation", {
-            experimentKey,
-          })
+          this.createMessage(
+            HackleMessage.from(
+              id,
+              "variation",
+              {
+                experimentKey,
+              },
+              this.getBrowserProperties()
+            )
+          )
         );
         this.resolverRecord.set(id, resolve);
       },
@@ -411,9 +556,16 @@ class HackleWebViewClient
       }>(
         (resolve) => {
           this.messageTransceiver.port.postMessage(
-            this.createMessage(id, "variationDetail", {
-              experimentKey,
-            })
+            this.createMessage(
+              HackleMessage.from(
+                id,
+                "variationDetail",
+                {
+                  experimentKey,
+                },
+                this.getBrowserProperties()
+              )
+            )
           );
           this.resolverRecord.set(id, resolve);
         },
@@ -440,9 +592,16 @@ class HackleWebViewClient
     const { isOn } = await promiseWithTimeout<{ isOn: boolean }>(
       (resolve) => {
         this.messageTransceiver.port.postMessage(
-          this.createMessage(id, "isFeatureOn", {
-            featureKey,
-          })
+          this.createMessage(
+            HackleMessage.from(
+              id,
+              "isFeatureOn",
+              {
+                featureKey,
+              },
+              this.getBrowserProperties()
+            )
+          )
         );
         this.resolverRecord.set(id, resolve);
       },
@@ -463,9 +622,16 @@ class HackleWebViewClient
       }>(
         (resolve) => {
           this.messageTransceiver.port.postMessage(
-            this.createMessage(id, "featureFlagDetail", {
-              featureKey,
-            })
+            this.createMessage(
+              HackleMessage.from(
+                id,
+                "featureFlagDetail",
+                {
+                  featureKey,
+                },
+                this.getBrowserProperties()
+              )
+            )
           );
           this.resolverRecord.set(id, resolve);
         },
@@ -490,7 +656,14 @@ class HackleWebViewClient
     return promiseWithTimeout<void>(
       (resolve) => {
         this.messageTransceiver.port.postMessage(
-          this.createMessage(id, "track", { event })
+          this.createMessage(
+            HackleMessage.from(
+              id,
+              "track",
+              { event },
+              this.getBrowserProperties()
+            )
+          )
         );
         this.resolverRecord.set(id, resolve);
       },
@@ -513,11 +686,18 @@ class HackleWebViewClient
       return promiseWithTimeout<{ configValue: string | number | boolean }>(
         (resolve) => {
           this.messageTransceiver.port.postMessage(
-            this.createMessage(id, "remoteConfig", {
-              key,
-              defaultValue,
-              valueType,
-            })
+            this.createMessage(
+              HackleMessage.from(
+                id,
+                "remoteConfig",
+                {
+                  key,
+                  defaultValue,
+                  valueType,
+                },
+                this.getBrowserProperties()
+              )
+            )
           );
           this.resolverRecord.set(id, resolve);
         },
@@ -534,7 +714,14 @@ class HackleWebViewClient
     return promiseWithTimeout<void>(
       (resolve) => {
         this.messageTransceiver.port.postMessage(
-          this.createMessage(id, "showUserExplorer", null)
+          this.createMessage(
+            HackleMessage.from(
+              id,
+              "showUserExplorer",
+              null,
+              this.getBrowserProperties()
+            )
+          )
         );
         this.resolverRecord.set(id, resolve);
       },
@@ -550,7 +737,14 @@ class HackleWebViewClient
     return promiseWithTimeout<void>(
       (resolve) => {
         this.messageTransceiver.port.postMessage(
-          this.createMessage(id, "hideUserExplorer", null)
+          this.createMessage(
+            HackleMessage.from(
+              id,
+              "hideUserExplorer",
+              null,
+              this.getBrowserProperties()
+            )
+          )
         );
         this.resolverRecord.set(id, resolve);
       },
@@ -566,7 +760,9 @@ class HackleWebViewClient
     return promiseWithTimeout<void>(
       (resolve) => {
         this.messageTransceiver.port.postMessage(
-          this.createMessage(id, "fetch", null)
+          this.createMessage(
+            HackleMessage.from(id, "fetch", null, this.getBrowserProperties())
+          )
         );
         this.resolverRecord.set(id, resolve);
       },
