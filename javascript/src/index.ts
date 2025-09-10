@@ -11,6 +11,7 @@ import {
   PropertyOperations,
   User,
   DefaultBrowserPropertyProvider,
+  HackleInAppMessageView,
 } from "@hackler/javascript-sdk";
 import { v4 as uuidv4 } from "uuid";
 import WebViewParameterConfig from "./parameter-config";
@@ -769,6 +770,13 @@ class HackleWebViewClient
       { onTimeout: (resolve) => resolve() }
     );
   }
+
+  getDisplayedInAppMessage(): Promise<null> {
+    console.log(
+      `[DEBUG] Hackle: getDisplayedInAppMessage is not supported in React Native WebView environment.`
+    );
+    return Promise.resolve(null);
+  }
 }
 
 /**
@@ -893,6 +901,9 @@ class HackleWebOnlyClient
   }
   onInitialized(config?: { timeout?: number }) {
     return this.client.onInitialized(config);
+  }
+  getDisplayedInAppMessage(): Promise<HackleInAppMessageView | null> {
+    return Promise.resolve(this.client.getDisplayedInAppMessageView());
   }
 }
 

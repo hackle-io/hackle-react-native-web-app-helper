@@ -2,6 +2,7 @@ import {
   Decision,
   FeatureFlagDecision,
   HackleEvent,
+  HackleInAppMessageView,
   HackleSubscriptionOperations,
   PageView,
   PropertyOperations,
@@ -47,4 +48,5 @@ export interface HackleClientBase
   onInitialized(config?: { timeout?: number }): Promise<{
     success: boolean;
   }>;
+  getDisplayedInAppMessage: () => Promise<HackleInAppMessageView | null>;
 }
