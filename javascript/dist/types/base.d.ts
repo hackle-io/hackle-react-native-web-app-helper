@@ -1,4 +1,4 @@
-import { Decision, FeatureFlagDecision, HackleEvent, HackleSubscriptionOperations, PageView, PropertyOperations, User } from "@hackler/javascript-sdk";
+import { Decision, FeatureFlagDecision, HackleEvent, HackleInAppMessageView, HackleSubscriptionOperations, PageView, PropertyOperations, User } from "@hackler/javascript-sdk";
 import { WebViewConfig } from "./remote-config";
 import { Emitter } from "./emitter";
 export interface HackleClientBase extends Emitter<{
@@ -33,4 +33,5 @@ export interface HackleClientBase extends Emitter<{
     }): Promise<{
         success: boolean;
     }>;
+    getDisplayedInAppMessage: () => Promise<HackleInAppMessageView | null>;
 }
