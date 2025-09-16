@@ -1,5 +1,7 @@
 import typescript from "@rollup/plugin-typescript";
 import terser from "@rollup/plugin-terser";
+import { nodeResolve } from "@rollup/plugin-node-resolve";
+import commonjs from "@rollup/plugin-commonjs";
 
 /** @type {import('rollup').RollupOptions} */
 export default {
@@ -11,7 +13,6 @@ export default {
       name: "HackleManager",
       globals: {
         "@hackler/javascript-sdk": "Hackle",
-        uuid: "uuid",
       },
       plugins: [terser()],
     },
@@ -28,6 +29,8 @@ export default {
       declarationDir: "dist/types",
       outputToFilesystem: true,
     }),
+    nodeResolve(),
+    commonjs(),
   ],
-  external: ["@hackler/javascript-sdk", "uuid"],
+  external: ["@hackler/javascript-sdk"],
 };
