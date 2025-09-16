@@ -6,15 +6,17 @@ React Native WebView에서 Hackle을 사용하기 위한 스크립트 입니다.
 
 ### JavaScript
 
-![Static Badge](https://img.shields.io/badge/%40hackler%2Fjavascript--sdk-11.47.0-blue?link=https%3A%2F%2Fwww.npmjs.com%2Fpackage%2F%40hackler%2Fjavascript-sdk%2Fv%2F11.47.0)
+![Static Badge](https://img.shields.io/badge/%40hackler%2Fjavascript--sdk-11.48.0-blue?link=https%3A%2F%2Fwww.npmjs.com%2Fpackage%2F%40hackler%2Fjavascript-sdk%2Fv%2F11.48.0)
 
-hackle-javascript-sdk 11.47.0 이하 버전에서 사용을 권장합니다.
+- hackle-javascript-sdk 11.48.0 이상 버전에서 사용을 권장합니다.
+- hackle-javascript-sdk 11.47.0 이하 버전에서는 정상적으로 동직하지 않습니다.
 
 ### React Native
 
-![Static Badge](https://img.shields.io/badge/%40hackler%2Freact--native--sdk-3.25.0-blue?link=https://www.npmjs.com/package/@hackler/react-native-sdk/v/3.25.0)
+![Static Badge](https://img.shields.io/badge/%40hackler%2Freact--native--sdk-3.26.0-blue?link=https://www.npmjs.com/package/@hackler/react-native-sdk/v/3.26.0)
 
-hackle-react-native-sdk 3.25.0 이하 버전에서 사용을 권장합니다.
+- hackle-react-native-sdk 3.26.0 이상 버전에서 사용을 권장합니다.
+- hackle-react-native-sdk 3.25.0 이하 버전에서 정상적으로 동직하지 않습니다.
 
 ## Comment
 
