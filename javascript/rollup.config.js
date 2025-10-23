@@ -28,6 +28,7 @@ export default {
       declaration: true,
       declarationDir: "dist/types",
       outputToFilesystem: true,
+      outDir: "dist"
     }),
     nodeResolve(),
     commonjs(),
