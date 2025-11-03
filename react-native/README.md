@@ -10,7 +10,7 @@ React Native WebView 에서 Hackle을 사용하기 위한 브릿지 패키지입
 ## 설치
 
 ```bash
-npm install git+https://github.com/hackle-io/hackle-react-native-web-app-helper.git#main:react-native
+npm install git+https://github.com/hackle-io/hackle-react-native-web-app-helper.git#0.0.3:react-native
 ```
 
 ## 사용법
