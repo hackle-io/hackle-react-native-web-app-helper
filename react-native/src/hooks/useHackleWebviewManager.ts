@@ -1,8 +1,8 @@
-import { HackleWebviewManagerParams, HackleWebviewManagerReturn } from './types';
-import { HACKLE_CONSTANTS } from './constants';
-import { isHackleMessageEvent, sendMessage } from './utils/messageHandler';
-import { invokeBridge } from './utils/bridgeInvoker';
-import * as commandHandlers from './utils/commandHandlers';
+import { HackleWebviewManagerParams, HackleWebviewManagerReturn } from '../types';
+import { HACKLE_CONSTANTS } from '../constants';
+import { isHackleMessageEvent, sendMessage } from '../utils/messageHandler';
+import { invokeBridge } from '../utils/bridgeInvoker';
+import * as commandHandlers from '../utils/commandHandlers';
 
 /**
  * Hackle 웹뷰 관리 훅
