@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { HackleMessage } from "./message";
 import { WebViewMessageTransceiver } from "./transceiver";
 
-function promiseWithTimeout<T>(
+function invokePromiseExecutor<T>(
   executor: (
     resolve: (value: T) => void,
     reject: (reason?: any) => void
@@ -27,7 +27,7 @@ function promiseWithTimeout<T>(
   });
 }
 
-export class WebViewHackleMessenger {
+export class ReactNativeWebViewInvocator {
   private readonly pendingResolvers = new Map<string, (payload: any) => void>();
   private readonly cleanup: () => void;
 
@@ -58,11 +58,7 @@ export class WebViewHackleMessenger {
     this.cleanup = () => this.transceiver.cleanUp();
   }
 
-  dispose() {
-    this.cleanup();
-  }
-
-  private nextId() {
+  private createId() {
     return uuidv4();
   }
 
@@ -74,12 +70,17 @@ export class WebViewHackleMessenger {
   }
 
   private serialize(id: string, type: string, payload: any) {
-    return JSON.stringify(
-      HackleMessage.from(id, type, payload, this.getBrowserProperties()).toDto()
+    const message = HackleMessage.from(
+      id,
+      type,
+      payload,
+      this.getBrowserProperties()
     );
+
+    return JSON.stringify(message.toDto());
   }
 
-  request<TResponse = any>(
+  invoke<TResponse = any>(
     type: string,
     payload: any,
     {
@@ -87,9 +88,9 @@ export class WebViewHackleMessenger {
       onTimeout,
     }: { timeoutMillis?: number; onTimeout: () => TResponse }
   ): Promise<TResponse> {
-    const id = this.nextId();
+    const id = this.createId();
 
-    return promiseWithTimeout<TResponse>(
+    return invokePromiseExecutor<TResponse>(
       (resolve) => {
         this.transceiver.port.postMessage(this.serialize(id, type, payload));
         this.pendingResolvers.set(id, resolve);
@@ -100,17 +101,6 @@ export class WebViewHackleMessenger {
       }
     );
   }
-
-  send(
-    type: string,
-    payload: any,
-    { timeoutMillis = 5000 }: { timeoutMillis?: number } = {}
-  ): Promise<void> {
-    return this.request<void>(type, payload, {
-      timeoutMillis,
-      onTimeout: () => undefined,
-    });
-  }
 }
 
-export default WebViewHackleMessenger;
+export default ReactNativeWebViewInvocator;
