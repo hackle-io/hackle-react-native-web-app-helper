@@ -12,66 +12,25 @@ import {
   User,
   DefaultBrowserPropertyProvider,
   HackleInAppMessageView,
+  WebViewLifecycleCompositeManager,
 } from "@hackler/javascript-sdk";
+
 import { v4 as uuidv4 } from "uuid";
 import WebViewParameterConfig from "./parameter-config";
 import WebViewRemoteConfig from "./remote-config";
 import { HackleClientBase } from "./base";
-
-class HackleMessage {
-  static MESSAGE_FIELD_NAME = "_hackle_message";
-
-  constructor(
-    readonly id: string,
-    readonly type: string,
-    readonly payload: any,
-    readonly browserProperties?: Record<string, string>
-  ) {}
-
-  static parseOrNull(data: any): HackleMessage | null {
-    try {
-      if (HackleMessage.MESSAGE_FIELD_NAME in data) {
-        const { id, type, payload, browserProperties } =
-          data[HackleMessage.MESSAGE_FIELD_NAME];
-        return new HackleMessage(id, type, payload, browserProperties);
-      }
-
-      return null;
-    } catch {
-      return null;
-    }
-  }
-
-  static from(
-    id: string,
-    type: string,
-    payload: any,
-    browserProperties: Record<string, string>
-  ) {
-    return new HackleMessage(id, type, payload, browserProperties);
-  }
-
-  toDto() {
-    return {
-      [HackleMessage.MESSAGE_FIELD_NAME]: {
-        id: this.id,
-        type: this.type,
-        payload: this.payload,
-        browserProperties: this.browserProperties,
-      },
-    };
-  }
-}
-
-interface Port {
-  postMessage(serialized: string): void;
-}
+import { WebViewMessageTransceiver, Port } from "./transceiver";
+import { HackleMessage } from "./message";
+import { AppPageListener } from "./listeners";
 
 declare global {
   interface Window {
     ReactNativeWebView: Port;
 
     _hackle_injected: boolean;
+    _hackleApp?: {
+      getWebViewConfig?: () => string;
+    };
   }
 }
 
@@ -100,6 +59,28 @@ function promiseWithTimeout<T>(
   });
 }
 
+function createWebViewClient(
+  sdkKey: string,
+  config: Config,
+  messageTransceiver: WebViewMessageTransceiver,
+  lifecycleCompositeManager: WebViewLifecycleCompositeManager
+) {
+  const browserPropertyProvider = new DefaultBrowserPropertyProvider();
+  const pageListener = new AppPageListener(
+    messageTransceiver,
+    browserPropertyProvider
+  );
+
+  lifecycleCompositeManager.addPageListener(pageListener);
+
+  return new HackleWebViewClient(
+    sdkKey,
+    config,
+    messageTransceiver,
+    browserPropertyProvider
+  );
+}
+
 /**
  * WebView 여부에 따라 다른 인스턴스를 반환하도록 하는 Wrapper
  * @example const hackleClient = new HackleManager().createInstance("SDK_KEY")
@@ -115,26 +96,21 @@ class HackleManager {
   }
   createInstance(sdkKey: string, config: Config): HackleClientBase {
     if (this.isInjectedEnvironment()) {
+      const lifecycleCompositeManager = new WebViewLifecycleCompositeManager();
+
       const messageTransceiver = new WebViewMessageTransceiver(
         window.ReactNativeWebView
       );
 
-      return new HackleWebViewClient(sdkKey, config, messageTransceiver);
+      return createWebViewClient(
+        sdkKey,
+        config,
+        messageTransceiver,
+        lifecycleCompositeManager
+      );
     }
 
     return new HackleWebOnlyClient(sdkKey, config);
-  }
-}
-
-class WebViewMessageTransceiver {
-  cleanUp: () => void = () => {};
-
-  constructor(readonly port: Port) {}
-
-  addEventListener(_listener: EventListener) {
-    // to work in both Android and iOS, useCapture should be true
-    window.addEventListener("message", _listener, true);
-    this.cleanUp = () => window.removeEventListener("message", _listener, true);
   }
 }
 
@@ -147,13 +123,13 @@ class HackleWebViewClient
   }>
   implements HackleClientBase
 {
-  private messageFieldName = "_hackle_message";
   private resolverRecord = new Map();
 
   constructor(
     private readonly sdkKey: string,
     private readonly config: Config,
-    private readonly messageTransceiver: WebViewMessageTransceiver
+    private readonly messageTransceiver: WebViewMessageTransceiver,
+    private readonly browserPropertyProvider: DefaultBrowserPropertyProvider
   ) {
     super();
     this.messageTransceiver.addEventListener((e) => {
@@ -181,9 +157,10 @@ class HackleWebViewClient
   }
 
   private getBrowserProperties(): Record<string, string> {
-    const properties =
-      new DefaultBrowserPropertyProvider().getBrowserProperties();
-    return properties as Record<string, string>;
+    return this.browserPropertyProvider.getBrowserProperties() as Record<
+      string,
+      string
+    >;
   }
 
   private createMessage(request: HackleMessage) {
