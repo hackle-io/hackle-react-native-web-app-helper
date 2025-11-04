@@ -12,92 +12,87 @@ import {
   User,
   DefaultBrowserPropertyProvider,
   HackleInAppMessageView,
+  WebViewLifecycleCompositeManager,
 } from "@hackler/javascript-sdk";
-import { v4 as uuidv4 } from "uuid";
+
 import WebViewParameterConfig from "./parameter-config";
 import WebViewRemoteConfig from "./remote-config";
 import { HackleClientBase } from "./base";
-
-class HackleMessage {
-  static MESSAGE_FIELD_NAME = "_hackle_message";
-
-  constructor(
-    readonly id: string,
-    readonly type: string,
-    readonly payload: any,
-    readonly browserProperties?: Record<string, string>
-  ) {}
-
-  static parseOrNull(data: any): HackleMessage | null {
-    try {
-      if (HackleMessage.MESSAGE_FIELD_NAME in data) {
-        const { id, type, payload, browserProperties } =
-          data[HackleMessage.MESSAGE_FIELD_NAME];
-        return new HackleMessage(id, type, payload, browserProperties);
-      }
-
-      return null;
-    } catch {
-      return null;
-    }
-  }
-
-  static from(
-    id: string,
-    type: string,
-    payload: any,
-    browserProperties: Record<string, string>
-  ) {
-    return new HackleMessage(id, type, payload, browserProperties);
-  }
-
-  toDto() {
-    return {
-      [HackleMessage.MESSAGE_FIELD_NAME]: {
-        id: this.id,
-        type: this.type,
-        payload: this.payload,
-        browserProperties: this.browserProperties,
-      },
-    };
-  }
-}
-
-interface Port {
-  postMessage(serialized: string): void;
-}
+import { WebViewMessageTransceiver, Port } from "./transceiver";
+import { AppPageListener } from "./listener/AppPageListener";
+import ReactNativeWebViewInvocator from "./invocator";
+import { AppEngagementListener } from "./listener/AppEngagementListener";
 
 declare global {
   interface Window {
     ReactNativeWebView: Port;
 
     _hackle_injected: boolean;
+    _hackleApp?: {
+      getWebViewConfig?: () => string;
+    };
   }
 }
 
-function promiseWithTimeout<T>(
-  callback: (
-    resolve: (value: T) => void,
-    reject: (reason?: any) => void
-  ) => void,
-  {
-    timeoutMillis = 5000,
-    onTimeout,
-  }: {
-    timeoutMillis?: number;
-    onTimeout: (
-      resolve: (value: T) => void,
-      reject: (reason?: any) => void
-    ) => void;
-  }
-) {
-  return new Promise<T>((resolve, reject) => {
-    callback(resolve, reject);
+interface WebViewConfig {
+  automaticScreenTracking: boolean;
+  automaticEngagementTracking: boolean;
+}
 
-    setTimeout(() => {
-      onTimeout(resolve, reject);
-    }, timeoutMillis);
-  });
+function getWebViewConfig(): WebViewConfig {
+  const DEFAULT_WEBVIEW_CONFIG: WebViewConfig = {
+    automaticScreenTracking: false,
+    automaticEngagementTracking: false,
+  };
+
+  try {
+    const seralizedWebViewConfig = window._hackleApp?.getWebViewConfig?.();
+    if (seralizedWebViewConfig) {
+      return JSON.parse(seralizedWebViewConfig);
+    }
+  } catch (err) {
+    console.error(`[DEBUG] Hackle: Failed to parse web view config. ${err}`);
+  }
+
+  return DEFAULT_WEBVIEW_CONFIG;
+}
+
+function createWebViewClient(
+  sdkKey: string,
+  config: Config,
+  messageTransceiver: WebViewMessageTransceiver,
+  lifecycleCompositeManager: WebViewLifecycleCompositeManager
+) {
+  const webViewConfig = getWebViewConfig();
+
+  const browserPropertyProvider = new DefaultBrowserPropertyProvider();
+  const messenger = new ReactNativeWebViewInvocator(
+    messageTransceiver,
+    browserPropertyProvider
+  );
+  const pageListener = new AppPageListener(messenger);
+  const engagementListener = new AppEngagementListener(messenger);
+
+  if (webViewConfig.automaticScreenTracking) {
+    lifecycleCompositeManager.enablePageTracking();
+    lifecycleCompositeManager.addPageListener(pageListener);
+  }
+
+  if (webViewConfig.automaticEngagementTracking) {
+    lifecycleCompositeManager.enableEngagementTracking();
+    lifecycleCompositeManager.addEngagementListener(engagementListener);
+  }
+
+  const browserName =
+    browserPropertyProvider.getBrowserProperties()["browserName"] || null;
+  lifecycleCompositeManager.install(
+    typeof browserName === "string" ? browserName : null
+  );
+
+  const client = new HackleWebViewClient(sdkKey, config, messenger);
+
+  lifecycleCompositeManager.initialize();
+  return client;
 }
 
 /**
@@ -115,26 +110,21 @@ class HackleManager {
   }
   createInstance(sdkKey: string, config: Config): HackleClientBase {
     if (this.isInjectedEnvironment()) {
+      const lifecycleCompositeManager = new WebViewLifecycleCompositeManager();
+
       const messageTransceiver = new WebViewMessageTransceiver(
         window.ReactNativeWebView
       );
 
-      return new HackleWebViewClient(sdkKey, config, messageTransceiver);
+      return createWebViewClient(
+        sdkKey,
+        config,
+        messageTransceiver,
+        lifecycleCompositeManager
+      );
     }
 
     return new HackleWebOnlyClient(sdkKey, config);
-  }
-}
-
-class WebViewMessageTransceiver {
-  cleanUp: () => void = () => {};
-
-  constructor(readonly port: Port) {}
-
-  addEventListener(_listener: EventListener) {
-    // to work in both Android and iOS, useCapture should be true
-    window.addEventListener("message", _listener, true);
-    this.cleanUp = () => window.removeEventListener("message", _listener, true);
   }
 }
 
@@ -147,89 +137,34 @@ class HackleWebViewClient
   }>
   implements HackleClientBase
 {
-  private messageFieldName = "_hackle_message";
-  private resolverRecord = new Map();
-
   constructor(
     private readonly sdkKey: string,
     private readonly config: Config,
-    private readonly messageTransceiver: WebViewMessageTransceiver
+    private readonly messenger: ReactNativeWebViewInvocator
   ) {
     super();
-    this.messageTransceiver.addEventListener((e) => {
-      const event = e as MessageEvent;
-      if (!event.data || event.data === "undefined") return;
-
-      try {
-        const data = JSON.parse(event.data);
-        const message = HackleMessage.parseOrNull(data);
-        if (!message) throw new Error("Invalid message");
-
-        const { id, payload } = message;
-
-        this.resolverRecord.get(id)?.(payload);
-        this.resolverRecord.delete(id);
-      } catch (err) {
-        console.log(
-          `[DEBUG] Hackle: Failed to parse message. If message not sent by hackle, please ignore this. ${err}`
-        );
-      }
-    });
   }
   onInitialized(config?: { timeout?: number }): Promise<{ success: boolean }> {
     return Promise.resolve({ success: true });
   }
 
-  private getBrowserProperties(): Record<string, string> {
-    const properties =
-      new DefaultBrowserPropertyProvider().getBrowserProperties();
-    return properties as Record<string, string>;
-  }
-
-  private createMessage(request: HackleMessage) {
-    return JSON.stringify(request.toDto());
-  }
-
-  private createId() {
-    return uuidv4();
-  }
-
   async getSessionId() {
-    const id = this.createId();
-
-    const { sessionId } = await promiseWithTimeout<{ sessionId: string }>(
-      (resolve) => {
-        this.messageTransceiver.port.postMessage(
-          this.createMessage(
-            HackleMessage.from(
-              id,
-              "getSessionId",
-              null,
-              this.getBrowserProperties()
-            )
-          )
-        );
-        this.resolverRecord.set(id, resolve);
-      },
-      { onTimeout: (resolve) => resolve({ sessionId: "" }) }
+    const { sessionId } = await this.messenger.invoke<{ sessionId: string }>(
+      "getSessionId",
+      null,
+      { onTimeout: () => ({ sessionId: "" }) }
     );
 
     return sessionId;
   }
 
   async getUser() {
-    const id = this.createId();
-
-    const { user } = await promiseWithTimeout<{ user: User }>(
-      (resolve) => {
-        this.messageTransceiver.port.postMessage(
-          this.createMessage(
-            HackleMessage.from(id, "getUser", null, this.getBrowserProperties())
-          )
-        );
-        this.resolverRecord.set(id, resolve);
-      },
-      { onTimeout: (resolve) => resolve({ user: {} }) }
+    const { user } = await this.messenger.invoke<{ user: User }>(
+      "getUser",
+      null,
+      {
+        onTimeout: () => ({ user: {} as User }),
+      }
     );
 
     return user;
@@ -240,342 +175,144 @@ class HackleWebViewClient
   }
 
   async setUser(user: User) {
-    const id = this.createId();
-
-    return promiseWithTimeout<void>(
-      (resolve) => {
-        this.messageTransceiver.port.postMessage(
-          this.createMessage(
-            HackleMessage.from(
-              id,
-              "setUser",
-              { user },
-              this.getBrowserProperties()
-            )
-          )
-        );
-        this.resolverRecord.set(id, resolve);
-      },
-      { onTimeout: (resolve) => resolve() }
-    ).then(() => {
-      this.emitUserUpdated();
-    });
+    return this.messenger
+      .invoke<void>("setUser", { user }, { onTimeout: () => undefined })
+      .then(() => {
+        this.emitUserUpdated();
+      });
   }
 
   async setUserId(userId: string | undefined | null) {
-    const id = this.createId();
+    let resolvedUserId = userId;
+    if (userId === undefined || userId === null) {
+      resolvedUserId = null as any;
+    }
 
-    return promiseWithTimeout<void>(
-      (resolve) => {
-        let resolvedUserId = userId;
-        if (userId === undefined || userId === null) {
-          resolvedUserId = null;
-        }
-
-        this.messageTransceiver.port.postMessage(
-          this.createMessage(
-            HackleMessage.from(
-              id,
-              "setUserId",
-              { userId: resolvedUserId },
-              this.getBrowserProperties()
-            )
-          )
-        );
-        this.resolverRecord.set(id, resolve);
-      },
-      { onTimeout: (resolve) => resolve() }
-    ).then(() => {
-      this.emitUserUpdated();
-    });
+    return this.messenger
+      .invoke<void>(
+        "setUserId",
+        { userId: resolvedUserId },
+        { onTimeout: () => undefined }
+      )
+      .then(() => {
+        this.emitUserUpdated();
+      });
   }
 
   async setDeviceId(deviceId: string) {
-    const id = this.createId();
-
-    return promiseWithTimeout<void>(
-      (resolve) => {
-        this.messageTransceiver.port.postMessage(
-          this.createMessage(
-            HackleMessage.from(
-              id,
-              "setDeviceId",
-              { deviceId },
-              this.getBrowserProperties()
-            )
-          )
-        );
-        this.resolverRecord.set(id, resolve);
-      },
-      { onTimeout: (resolve) => resolve() }
-    ).then(() => {
-      this.emitUserUpdated();
-    });
+    return this.messenger
+      .invoke<void>("setDeviceId", { deviceId }, { onTimeout: () => undefined })
+      .then(() => {
+        this.emitUserUpdated();
+      });
   }
 
   async setUserProperty(key: string, value: any) {
-    const id = this.createId();
-
-    return promiseWithTimeout<void>(
-      (resolve) => {
-        this.messageTransceiver.port.postMessage(
-          this.createMessage(
-            HackleMessage.from(
-              id,
-              "setUserProperty",
-              { key, value },
-              this.getBrowserProperties()
-            )
-          )
-        );
-        this.resolverRecord.set(id, resolve);
-      },
-      { onTimeout: (resolve) => resolve() }
-    ).then(() => {
-      this.emitUserUpdated();
-    });
+    return this.messenger
+      .invoke<void>(
+        "setUserProperty",
+        { key, value },
+        { onTimeout: () => undefined }
+      )
+      .then(() => {
+        this.emitUserUpdated();
+      });
   }
 
   async setUserProperties(properties: Record<string, any>) {
-    const id = this.createId();
-
-    return promiseWithTimeout<void>(
-      (resolve) => {
-        this.messageTransceiver.port.postMessage(
-          this.createMessage(
-            HackleMessage.from(
-              id,
-              "setUserProperties",
-              { properties },
-              this.getBrowserProperties()
-            )
-          )
-        );
-        this.resolverRecord.set(id, resolve);
-      },
-      { onTimeout: (resolve) => resolve() }
-    ).then(() => {
-      this.emitUserUpdated();
-    });
+    return this.messenger
+      .invoke<void>(
+        "setUserProperties",
+        { properties },
+        { onTimeout: () => undefined }
+      )
+      .then(() => {
+        this.emitUserUpdated();
+      });
   }
 
   async updateUserProperties(operations: PropertyOperations) {
-    const id = this.createId();
-
-    return promiseWithTimeout<void>(
-      (resolve) => {
-        this.messageTransceiver.port.postMessage(
-          this.createMessage(
-            HackleMessage.from(
-              id,
-              "updateUserProperties",
-              {
-                operations: operations.toRecord(),
-              },
-              this.getBrowserProperties()
-            )
-          )
-        );
-
-        this.resolverRecord.set(id, resolve);
-      },
-      { onTimeout: (resolve) => resolve() }
-    ).then(() => {
-      this.emitUserUpdated();
-    });
+    return this.messenger
+      .invoke<void>(
+        "updateUserProperties",
+        { operations: operations.toRecord() },
+        { onTimeout: () => undefined }
+      )
+      .then(() => {
+        this.emitUserUpdated();
+      });
   }
 
   updatePushSubscriptions(operations: HackleSubscriptionOperations) {
-    const id = this.createId();
-
-    return promiseWithTimeout<void>(
-      (resolve) => {
-        this.messageTransceiver.port.postMessage(
-          this.createMessage(
-            HackleMessage.from(
-              id,
-              "updatePushSubscriptions",
-              {
-                operations: operations.toRecord(),
-              },
-              this.getBrowserProperties()
-            )
-          )
-        );
-
-        this.resolverRecord.set(id, resolve);
-      },
-      { onTimeout: (resolve) => resolve() }
+    return this.messenger.invoke<void>(
+      "updatePushSubscriptions",
+      { operations: operations.toRecord() },
+      { onTimeout: () => undefined }
     );
   }
 
   updateSmsSubscriptions(operations: HackleSubscriptionOperations) {
-    const id = this.createId();
-
-    return promiseWithTimeout<void>(
-      (resolve) => {
-        this.messageTransceiver.port.postMessage(
-          this.createMessage(
-            HackleMessage.from(
-              id,
-              "updateSmsSubscriptions",
-              {
-                operations: operations.toRecord(),
-              },
-              this.getBrowserProperties()
-            )
-          )
-        );
-
-        this.resolverRecord.set(id, resolve);
-      },
-      { onTimeout: (resolve) => resolve() }
+    return this.messenger.invoke<void>(
+      "updateSmsSubscriptions",
+      { operations: operations.toRecord() },
+      { onTimeout: () => undefined }
     );
   }
 
   updateKakaoSubscriptions(operations: HackleSubscriptionOperations) {
-    const id = this.createId();
-
-    return promiseWithTimeout<void>(
-      (resolve) => {
-        this.messageTransceiver.port.postMessage(
-          this.createMessage(
-            HackleMessage.from(
-              id,
-              "updateKakaoSubscriptions",
-              {
-                operations: operations.toRecord(),
-              },
-              this.getBrowserProperties()
-            )
-          )
-        );
-
-        this.resolverRecord.set(id, resolve);
-      },
-      { onTimeout: (resolve) => resolve() }
+    return this.messenger.invoke<void>(
+      "updateKakaoSubscriptions",
+      { operations: operations.toRecord() },
+      { onTimeout: () => undefined }
     );
   }
 
   setPhoneNumber(phoneNumber: string) {
-    const id = this.createId();
-
-    return promiseWithTimeout<void>(
-      (resolve) => {
-        this.messageTransceiver.port.postMessage(
-          this.createMessage(
-            HackleMessage.from(
-              id,
-              "setPhoneNumber",
-              { phoneNumber },
-              this.getBrowserProperties()
-            )
-          )
-        );
-        this.resolverRecord.set(id, resolve);
-      },
-      { onTimeout: (resolve) => resolve() }
+    return this.messenger.invoke<void>(
+      "setPhoneNumber",
+      { phoneNumber },
+      { onTimeout: () => undefined }
     );
   }
 
   unsetPhoneNumber() {
-    const id = this.createId();
-
-    return promiseWithTimeout<void>(
-      (resolve) => {
-        this.messageTransceiver.port.postMessage(
-          this.createMessage(
-            HackleMessage.from(
-              id,
-              "unsetPhoneNumber",
-              null,
-              this.getBrowserProperties()
-            )
-          )
-        );
-        this.resolverRecord.set(id, resolve);
-      },
-      { onTimeout: (resolve) => resolve() }
-    );
-  }
-
-  async resetUser() {
-    const id = this.createId();
-
-    return promiseWithTimeout<void>(
-      (resolve) => {
-        this.messageTransceiver.port.postMessage(
-          this.createMessage(
-            HackleMessage.from(
-              id,
-              "resetUser",
-              null,
-              this.getBrowserProperties()
-            )
-          )
-        );
-        this.resolverRecord.set(id, resolve);
-      },
-      { onTimeout: (resolve) => resolve() }
-    ).then(() => {
-      this.emitUserUpdated();
+    return this.messenger.invoke<void>("unsetPhoneNumber", null, {
+      onTimeout: () => undefined,
     });
   }
 
-  async variation(experimentKey: number): Promise<string> {
-    const id = this.createId();
+  async resetUser() {
+    return this.messenger
+      .invoke<void>("resetUser", null, { onTimeout: () => undefined })
+      .then(() => {
+        this.emitUserUpdated();
+      });
+  }
 
-    const { variation } = await promiseWithTimeout<{ variation: string }>(
-      (resolve) => {
-        this.messageTransceiver.port.postMessage(
-          this.createMessage(
-            HackleMessage.from(
-              id,
-              "variation",
-              {
-                experimentKey,
-              },
-              this.getBrowserProperties()
-            )
-          )
-        );
-        this.resolverRecord.set(id, resolve);
-      },
-      { onTimeout: (resolve) => resolve({ variation: "A" }) }
+  async variation(experimentKey: number): Promise<string> {
+    const { variation } = await this.messenger.invoke<{ variation: string }>(
+      "variation",
+      { experimentKey },
+      { onTimeout: () => ({ variation: "A" }) }
     );
     return variation;
   }
 
   async variationDetail(experimentKey: number) {
-    const id = this.createId();
-
     try {
-      const payload = await promiseWithTimeout<{
+      const { variation, reason, parameters } = await this.messenger.invoke<{
         variation: string;
         reason: DecisionReason;
         parameters: Record<string, string | number | boolean>;
       }>(
-        (resolve) => {
-          this.messageTransceiver.port.postMessage(
-            this.createMessage(
-              HackleMessage.from(
-                id,
-                "variationDetail",
-                {
-                  experimentKey,
-                },
-                this.getBrowserProperties()
-              )
-            )
-          );
-          this.resolverRecord.set(id, resolve);
-        },
+        "variationDetail",
+        { experimentKey },
         {
-          onTimeout: (resolve, reject) => reject(),
+          onTimeout: () => {
+            throw new Error("timeout");
+          },
         }
       );
-
-      const { variation, reason, parameters } = payload;
 
       return Decision.of(
         variation,
@@ -588,58 +325,30 @@ class HackleWebViewClient
   }
 
   async isFeatureOn(featureKey: number) {
-    const id = this.createId();
-
-    const { isOn } = await promiseWithTimeout<{ isOn: boolean }>(
-      (resolve) => {
-        this.messageTransceiver.port.postMessage(
-          this.createMessage(
-            HackleMessage.from(
-              id,
-              "isFeatureOn",
-              {
-                featureKey,
-              },
-              this.getBrowserProperties()
-            )
-          )
-        );
-        this.resolverRecord.set(id, resolve);
-      },
-      { onTimeout: (resolve) => resolve({ isOn: false }) }
+    const { isOn } = await this.messenger.invoke<{ isOn: boolean }>(
+      "isFeatureOn",
+      { featureKey },
+      { onTimeout: () => ({ isOn: false }) }
     );
 
     return isOn;
   }
 
   async featureFlagDetail(featureKey: number) {
-    const id = this.createId();
-
     try {
-      const payload = await promiseWithTimeout<{
+      const { isOn, reason, parameters } = await this.messenger.invoke<{
         isOn: boolean;
         reason: DecisionReason;
         parameters: Record<string, string | number | boolean>;
       }>(
-        (resolve) => {
-          this.messageTransceiver.port.postMessage(
-            this.createMessage(
-              HackleMessage.from(
-                id,
-                "featureFlagDetail",
-                {
-                  featureKey,
-                },
-                this.getBrowserProperties()
-              )
-            )
-          );
-          this.resolverRecord.set(id, resolve);
-        },
-        { onTimeout: (resolve, reject) => reject() }
+        "featureFlagDetail",
+        { featureKey },
+        {
+          onTimeout: () => {
+            throw new Error("timeout");
+          },
+        }
       );
-      const { isOn, reason, parameters } = payload;
-
       return new FeatureFlagDecision(
         isOn,
         reason,
@@ -652,25 +361,10 @@ class HackleWebViewClient
   }
 
   track(event: HackleEvent) {
-    const id = this.createId();
-
-    return promiseWithTimeout<void>(
-      (resolve) => {
-        this.messageTransceiver.port.postMessage(
-          this.createMessage(
-            HackleMessage.from(
-              id,
-              "track",
-              { event },
-              this.getBrowserProperties()
-            )
-          )
-        );
-        this.resolverRecord.set(id, resolve);
-      },
-      {
-        onTimeout: (resolve) => resolve(),
-      }
+    return this.messenger.invoke<void>(
+      "track",
+      { event },
+      { onTimeout: () => undefined }
     );
   }
 
@@ -682,27 +376,10 @@ class HackleWebViewClient
     const remoteConfigGetter: ConstructorParameters<
       typeof WebViewRemoteConfig
     >[0] = (key: string, defaultValue: any, valueType: string) => {
-      const id = this.createId();
-
-      return promiseWithTimeout<{ configValue: string | number | boolean }>(
-        (resolve) => {
-          this.messageTransceiver.port.postMessage(
-            this.createMessage(
-              HackleMessage.from(
-                id,
-                "remoteConfig",
-                {
-                  key,
-                  defaultValue,
-                  valueType,
-                },
-                this.getBrowserProperties()
-              )
-            )
-          );
-          this.resolverRecord.set(id, resolve);
-        },
-        { onTimeout: (resolve) => resolve(defaultValue) }
+      return this.messenger.invoke<{ configValue: string | number | boolean }>(
+        "remoteConfig",
+        { key, defaultValue, valueType },
+        { onTimeout: () => defaultValue }
       );
     };
 
@@ -710,65 +387,21 @@ class HackleWebViewClient
   }
 
   showUserExplorer() {
-    const id = this.createId();
-
-    return promiseWithTimeout<void>(
-      (resolve) => {
-        this.messageTransceiver.port.postMessage(
-          this.createMessage(
-            HackleMessage.from(
-              id,
-              "showUserExplorer",
-              null,
-              this.getBrowserProperties()
-            )
-          )
-        );
-        this.resolverRecord.set(id, resolve);
-      },
-      {
-        onTimeout: (resolve) => resolve(),
-      }
-    );
+    return this.messenger.invoke<void>("showUserExplorer", null, {
+      onTimeout: () => undefined,
+    });
   }
 
   async hideUserExplorer() {
-    const id = this.createId();
-
-    return promiseWithTimeout<void>(
-      (resolve) => {
-        this.messageTransceiver.port.postMessage(
-          this.createMessage(
-            HackleMessage.from(
-              id,
-              "hideUserExplorer",
-              null,
-              this.getBrowserProperties()
-            )
-          )
-        );
-        this.resolverRecord.set(id, resolve);
-      },
-      {
-        onTimeout: (resolve) => resolve(),
-      }
-    );
+    return this.messenger.invoke<void>("hideUserExplorer", null, {
+      onTimeout: () => undefined,
+    });
   }
 
   fetch() {
-    const id = this.createId();
-
-    return promiseWithTimeout<void>(
-      (resolve) => {
-        this.messageTransceiver.port.postMessage(
-          this.createMessage(
-            HackleMessage.from(id, "fetch", null, this.getBrowserProperties())
-          )
-        );
-        this.resolverRecord.set(id, resolve);
-      },
-      { onTimeout: (resolve) => resolve() }
-    );
+    return this.messenger.invoke<void>("fetch", null, {
+      onTimeout: () => undefined,
+    });
   }
 
   getDisplayedInAppMessage(): Promise<null> {
