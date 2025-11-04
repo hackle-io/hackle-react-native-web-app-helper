@@ -74,12 +74,10 @@ function createWebViewClient(
   const engagementListener = new AppEngagementListener(messenger);
 
   if (webViewConfig.automaticScreenTracking) {
-    lifecycleCompositeManager.enablePageTracking();
     lifecycleCompositeManager.addPageListener(pageListener);
   }
 
   if (webViewConfig.automaticEngagementTracking) {
-    lifecycleCompositeManager.enableEngagementTracking();
     lifecycleCompositeManager.addEngagementListener(engagementListener);
   }
 

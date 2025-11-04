@@ -6,7 +6,7 @@ type Timestamp = Parameters<EngagementListener["onEngagement"]>[1];
 
 export class AppEngagementListener implements EngagementListener {
   static ENGAGEMENT_EVENT_KEY = "$engagement";
-  static ENGAGEMENT_TIME_PROPERTY_KEY = "engagement_time";
+  static ENGAGEMENT_TIME_PROPERTY_KEY = "$engagement_time_ms";
   static ENGAGEMENT_PAGE_NAME_KEY = "$page_name";
 
   constructor(private readonly invocator: ReactNativeWebViewInvocator) {}
@@ -20,7 +20,6 @@ export class AppEngagementListener implements EngagementListener {
         [AppEngagementListener.ENGAGEMENT_TIME_PROPERTY_KEY]:
           engagement.durationMillis,
       },
-      value: engagement.durationMillis,
     };
 
     this.invocator
