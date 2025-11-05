@@ -39,17 +39,25 @@ interface WebViewConfig {
   automaticEngagementTracking: boolean;
 }
 
-function getWebViewConfig(): WebViewConfig {
-  const DEFAULT_WEBVIEW_CONFIG: WebViewConfig = {
-    automaticScreenTracking: false,
-    automaticEngagementTracking: false,
-  };
+const DEFAULT_WEBVIEW_CONFIG: WebViewConfig = {
+  automaticScreenTracking: false,
+  automaticEngagementTracking: false,
+};
 
+function getWebViewConfig(): WebViewConfig {
   try {
     const seralizedWebViewConfig = window._hackleApp?.getWebViewConfig?.();
-    if (seralizedWebViewConfig) {
-      return JSON.parse(seralizedWebViewConfig);
-    }
+    if (!seralizedWebViewConfig) return DEFAULT_WEBVIEW_CONFIG;
+
+    const parsedConfig = JSON.parse(seralizedWebViewConfig);
+    return {
+      automaticScreenTracking:
+        parsedConfig.automaticScreenTracking ??
+        DEFAULT_WEBVIEW_CONFIG.automaticScreenTracking,
+      automaticEngagementTracking:
+        parsedConfig.automaticEngagementTracking ??
+        DEFAULT_WEBVIEW_CONFIG.automaticEngagementTracking,
+    };
   } catch (err) {
     console.error(`[DEBUG] Hackle: Failed to parse web view config. ${err}`);
   }
@@ -61,11 +69,11 @@ function createWebViewClient(
   sdkKey: string,
   config: Config,
   messageTransceiver: WebViewMessageTransceiver,
-  lifecycleCompositeManager: WebViewLifecycleCompositeManager
+  lifecycleCompositeManager: WebViewLifecycleCompositeManager,
+  browserPropertyProvider: DefaultBrowserPropertyProvider
 ) {
   const webViewConfig = getWebViewConfig();
 
-  const browserPropertyProvider = new DefaultBrowserPropertyProvider();
   const messenger = new ReactNativeWebViewInvocator(
     messageTransceiver,
     browserPropertyProvider
@@ -80,12 +88,6 @@ function createWebViewClient(
   if (webViewConfig.automaticEngagementTracking) {
     lifecycleCompositeManager.addEngagementListener(engagementListener);
   }
-
-  const browserName =
-    browserPropertyProvider.getBrowserProperties()["browserName"] || null;
-  lifecycleCompositeManager.install(
-    typeof browserName === "string" ? browserName : null
-  );
 
   const client = new HackleWebViewClient(sdkKey, config, messenger);
 
@@ -108,7 +110,12 @@ class HackleManager {
   }
   createInstance(sdkKey: string, config: Config): HackleClientBase {
     if (this.isInjectedEnvironment()) {
-      const lifecycleCompositeManager = new WebViewLifecycleCompositeManager();
+      const browserPropertyProvider = new DefaultBrowserPropertyProvider();
+      const browserName =
+        browserPropertyProvider.getBrowserProperties()["browserName"];
+      const lifecycleCompositeManager = new WebViewLifecycleCompositeManager(
+        typeof browserName === "string" ? browserName : null
+      );
 
       const messageTransceiver = new WebViewMessageTransceiver(
         window.ReactNativeWebView
@@ -118,7 +125,8 @@ class HackleManager {
         sdkKey,
         config,
         messageTransceiver,
-        lifecycleCompositeManager
+        lifecycleCompositeManager,
+        browserPropertyProvider
       );
     }
 
