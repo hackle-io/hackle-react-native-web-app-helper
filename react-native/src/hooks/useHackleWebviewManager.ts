@@ -1,7 +1,14 @@
 import type {HackleWebviewManagerParams, HackleWebviewManagerReturn} from '../types';
 import { HACKLE_CONSTANTS } from '../constants';
-import { isHackleMessageEvent, sendMessage, invokeBridge } from '../utils';
-import * as commandHandlers from '../utils/commandHandlers';
+import {
+    isHackleMessageEvent,
+    sendMessage,
+    invokeBridge,
+    getUser,
+    getSessionId,
+    variation,
+    variationDetail, isFeatureOn, featureFlagDetail, remoteConfig
+} from '../invocator';
 import { HackleWebViewConfig } from '../models'
 
 /**
@@ -26,19 +33,19 @@ export default function useHackleWebviewManager({
 
       switch (request.type) {
         case 'getUser':
-          return commandHandlers.getUser(request, hackleClient, postMessage);
+          return getUser(request, hackleClient, postMessage);
         case 'getSessionId':
-          return commandHandlers.getSessionId(request, hackleClient, postMessage);
+          return getSessionId(request, hackleClient, postMessage);
         case 'variation':
-          return commandHandlers.variation(request, hackleClient, postMessage);
+          return variation(request, hackleClient, postMessage);
         case 'variationDetail':
-          return commandHandlers.variationDetail(request, hackleClient, postMessage);
+          return variationDetail(request, hackleClient, postMessage);
         case 'isFeatureOn':
-          return commandHandlers.isFeatureOn(request, hackleClient, postMessage);
+          return isFeatureOn(request, hackleClient, postMessage);
         case 'featureFlagDetail':
-          return commandHandlers.featureFlagDetail(request, hackleClient, postMessage);
+          return featureFlagDetail(request, hackleClient, postMessage);
         case 'remoteConfig':
-          return commandHandlers.remoteConfig(request, hackleClient, postMessage);
+          return remoteConfig(request, hackleClient, postMessage);
         case 'setUser':
         case 'setUserId':
         case 'setDeviceId':
