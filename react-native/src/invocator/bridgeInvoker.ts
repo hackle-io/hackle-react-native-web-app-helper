@@ -25,7 +25,7 @@ export const invokeBridge = async (
  * @param postMessage - 메시지 전송 함수
  * @param dataMapper - 성공 시 'result.data'를 'sendMessage' 페이로드로 변환하는 콜백 함수
  */
-const invokeBridgeMapper = async (
+const _invokeBridgeMapper = async (
   request: HackleRequest,
   hackleClient: any,
   postMessage: (message: string) => void,
@@ -56,7 +56,7 @@ export const getUser = async (
     hackleClient: any,
     postMessage: (message: string) => void
 ): Promise<void> => {
-    await invokeBridgeMapper(request, hackleClient, postMessage, (data) => ({
+    await _invokeBridgeMapper(request, hackleClient, postMessage, (data) => ({
         user: data,
     }));
 };
@@ -69,7 +69,7 @@ export const getSessionId = async (
     hackleClient: any,
     postMessage: (message: string) => void
 ): Promise<void> => {
-    await invokeBridgeMapper(request, hackleClient, postMessage, (data) => ({
+    await _invokeBridgeMapper(request, hackleClient, postMessage, (data) => ({
         sessionId: data,
     }));
 };
@@ -82,7 +82,7 @@ export const variation = async (
     hackleClient: any,
     postMessage: (message: string) => void
 ): Promise<void> => {
-    await invokeBridgeMapper(request, hackleClient, postMessage, (data) => ({
+    await _invokeBridgeMapper(request, hackleClient, postMessage, (data) => ({
         variation: data,
     }));
 };
@@ -95,7 +95,7 @@ export const variationDetail = async (
     hackleClient: any,
     postMessage: (message: string) => void
 ): Promise<void> => {
-    await invokeBridgeMapper(request, hackleClient, postMessage, (data) => ({
+    await _invokeBridgeMapper(request, hackleClient, postMessage, (data) => ({
         variation: data.variation,
         parameters: data.config.parameters,
         reason: data.reason,
@@ -110,7 +110,7 @@ export const isFeatureOn = async (
     hackleClient: any,
     postMessage: (message: string) => void
 ): Promise<void> => {
-    await invokeBridgeMapper(request, hackleClient, postMessage, (data) => ({
+    await _invokeBridgeMapper(request, hackleClient, postMessage, (data) => ({
         isOn: data,
     }));
 };
@@ -123,7 +123,7 @@ export const featureFlagDetail = async (
     hackleClient: any,
     postMessage: (message: string) => void
 ): Promise<void> => {
-    await invokeBridgeMapper(request, hackleClient, postMessage, (data) => ({
+    await _invokeBridgeMapper(request, hackleClient, postMessage, (data) => ({
         isOn: data.isOn,
         parameters: data.config.parameters,
         reason: data.reason,
@@ -138,7 +138,7 @@ export const remoteConfig = async (
     hackleClient: any,
     postMessage: (message: string) => void
 ): Promise<void> => {
-    await invokeBridgeMapper(request, hackleClient, postMessage, (data) => ({
+    await _invokeBridgeMapper(request, hackleClient, postMessage, (data) => ({
         configValue: data,
     }));
 };
