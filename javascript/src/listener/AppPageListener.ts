@@ -24,8 +24,13 @@ export class AppPageListener implements PageListener {
       },
     };
 
+    const invocation = {
+      type: "track",
+      payload: { event },
+    };
+
     this.invocator
-      .invoke<void>("track", { event }, { onTimeout: () => undefined })
+      .invoke<void>(invocation, { onTimeout: () => undefined })
       .catch(() => {
         // ignore
       });

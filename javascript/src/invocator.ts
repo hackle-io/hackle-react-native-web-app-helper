@@ -69,20 +69,26 @@ export class ReactNativeWebViewInvocator {
     >;
   }
 
-  private serialize(id: string, type: string, payload: any) {
-    const message = HackleMessage.from(
-      id,
-      type,
-      payload,
-      this.getBrowserProperties()
-    );
+  private serialize(
+    id: string,
+    type: string,
+    payload: any,
+    browserProperties: Record<string, string> = {}
+  ) {
+    const message = HackleMessage.from(id, type, payload, {
+      ...this.getBrowserProperties(),
+      ...browserProperties,
+    });
 
     return JSON.stringify(message.toDto());
   }
 
   invoke<TResponse = any>(
-    type: string,
-    payload: any,
+    invocation: {
+      type: string;
+      payload: any;
+      browserProperties?: Record<string, string>;
+    },
     {
       timeoutMillis = 5000,
       onTimeout,
@@ -92,7 +98,14 @@ export class ReactNativeWebViewInvocator {
 
     return invokePromiseExecutor<TResponse>(
       (resolve) => {
-        this.transceiver.port.postMessage(this.serialize(id, type, payload));
+        this.transceiver.port.postMessage(
+          this.serialize(
+            id,
+            invocation.type,
+            invocation.payload,
+            invocation.browserProperties
+          )
+        );
         this.pendingResolvers.set(id, resolve);
       },
       {

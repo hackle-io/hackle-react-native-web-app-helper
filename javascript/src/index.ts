@@ -79,7 +79,10 @@ function createWebViewClient(
     browserPropertyProvider
   );
   const pageListener = new AppPageListener(messenger);
-  const engagementListener = new AppEngagementListener(messenger);
+  const engagementListener = new AppEngagementListener(
+    messenger,
+    browserPropertyProvider
+  );
 
   if (webViewConfig.automaticScreenTracking) {
     lifecycleCompositeManager.addPageListener(pageListener);
@@ -156,8 +159,7 @@ class HackleWebViewClient
 
   async getSessionId() {
     const { sessionId } = await this.messenger.invoke<{ sessionId: string }>(
-      "getSessionId",
-      null,
+      { type: "getSessionId", payload: null },
       { onTimeout: () => ({ sessionId: "" }) }
     );
 
@@ -166,8 +168,7 @@ class HackleWebViewClient
 
   async getUser() {
     const { user } = await this.messenger.invoke<{ user: User }>(
-      "getUser",
-      null,
+      { type: "getUser", payload: null },
       {
         onTimeout: () => ({ user: {} as User }),
       }
@@ -182,7 +183,10 @@ class HackleWebViewClient
 
   async setUser(user: User) {
     return this.messenger
-      .invoke<void>("setUser", { user }, { onTimeout: () => undefined })
+      .invoke<void>(
+        { type: "setUser", payload: { user } },
+        { onTimeout: () => undefined }
+      )
       .then(() => {
         this.emitUserUpdated();
       });
@@ -196,8 +200,7 @@ class HackleWebViewClient
 
     return this.messenger
       .invoke<void>(
-        "setUserId",
-        { userId: resolvedUserId },
+        { type: "setUserId", payload: { userId: resolvedUserId } },
         { onTimeout: () => undefined }
       )
       .then(() => {
@@ -207,7 +210,10 @@ class HackleWebViewClient
 
   async setDeviceId(deviceId: string) {
     return this.messenger
-      .invoke<void>("setDeviceId", { deviceId }, { onTimeout: () => undefined })
+      .invoke<void>(
+        { type: "setDeviceId", payload: { deviceId } },
+        { onTimeout: () => undefined }
+      )
       .then(() => {
         this.emitUserUpdated();
       });
@@ -216,8 +222,7 @@ class HackleWebViewClient
   async setUserProperty(key: string, value: any) {
     return this.messenger
       .invoke<void>(
-        "setUserProperty",
-        { key, value },
+        { type: "setUserProperty", payload: { key, value } },
         { onTimeout: () => undefined }
       )
       .then(() => {
@@ -228,8 +233,7 @@ class HackleWebViewClient
   async setUserProperties(properties: Record<string, any>) {
     return this.messenger
       .invoke<void>(
-        "setUserProperties",
-        { properties },
+        { type: "setUserProperties", payload: { properties } },
         { onTimeout: () => undefined }
       )
       .then(() => {
@@ -240,8 +244,10 @@ class HackleWebViewClient
   async updateUserProperties(operations: PropertyOperations) {
     return this.messenger
       .invoke<void>(
-        "updateUserProperties",
-        { operations: operations.toRecord() },
+        {
+          type: "updateUserProperties",
+          payload: { operations: operations.toRecord() },
+        },
         { onTimeout: () => undefined }
       )
       .then(() => {
@@ -251,45 +257,56 @@ class HackleWebViewClient
 
   updatePushSubscriptions(operations: HackleSubscriptionOperations) {
     return this.messenger.invoke<void>(
-      "updatePushSubscriptions",
-      { operations: operations.toRecord() },
+      {
+        type: "updatePushSubscriptions",
+        payload: { operations: operations.toRecord() },
+      },
       { onTimeout: () => undefined }
     );
   }
 
   updateSmsSubscriptions(operations: HackleSubscriptionOperations) {
     return this.messenger.invoke<void>(
-      "updateSmsSubscriptions",
-      { operations: operations.toRecord() },
+      {
+        type: "updateSmsSubscriptions",
+        payload: { operations: operations.toRecord() },
+      },
       { onTimeout: () => undefined }
     );
   }
 
   updateKakaoSubscriptions(operations: HackleSubscriptionOperations) {
     return this.messenger.invoke<void>(
-      "updateKakaoSubscriptions",
-      { operations: operations.toRecord() },
+      {
+        type: "updateKakaoSubscriptions",
+        payload: { operations: operations.toRecord() },
+      },
       { onTimeout: () => undefined }
     );
   }
 
   setPhoneNumber(phoneNumber: string) {
     return this.messenger.invoke<void>(
-      "setPhoneNumber",
-      { phoneNumber },
+      { type: "setPhoneNumber", payload: { phoneNumber } },
       { onTimeout: () => undefined }
     );
   }
 
   unsetPhoneNumber() {
-    return this.messenger.invoke<void>("unsetPhoneNumber", null, {
-      onTimeout: () => undefined,
-    });
+    return this.messenger.invoke<void>(
+      { type: "unsetPhoneNumber", payload: null },
+      {
+        onTimeout: () => undefined,
+      }
+    );
   }
 
   async resetUser() {
     return this.messenger
-      .invoke<void>("resetUser", null, { onTimeout: () => undefined })
+      .invoke<void>(
+        { type: "resetUser", payload: null },
+        { onTimeout: () => undefined }
+      )
       .then(() => {
         this.emitUserUpdated();
       });
@@ -297,8 +314,7 @@ class HackleWebViewClient
 
   async variation(experimentKey: number): Promise<string> {
     const { variation } = await this.messenger.invoke<{ variation: string }>(
-      "variation",
-      { experimentKey },
+      { type: "variation", payload: { experimentKey } },
       { onTimeout: () => ({ variation: "A" }) }
     );
     return variation;
@@ -311,8 +327,7 @@ class HackleWebViewClient
         reason: DecisionReason;
         parameters: Record<string, string | number | boolean>;
       }>(
-        "variationDetail",
-        { experimentKey },
+        { type: "variationDetail", payload: { experimentKey } },
         {
           onTimeout: () => {
             throw new Error("timeout");
@@ -332,8 +347,7 @@ class HackleWebViewClient
 
   async isFeatureOn(featureKey: number) {
     const { isOn } = await this.messenger.invoke<{ isOn: boolean }>(
-      "isFeatureOn",
-      { featureKey },
+      { type: "isFeatureOn", payload: { featureKey } },
       { onTimeout: () => ({ isOn: false }) }
     );
 
@@ -347,8 +361,7 @@ class HackleWebViewClient
         reason: DecisionReason;
         parameters: Record<string, string | number | boolean>;
       }>(
-        "featureFlagDetail",
-        { featureKey },
+        { type: "featureFlagDetail", payload: { featureKey } },
         {
           onTimeout: () => {
             throw new Error("timeout");
@@ -368,8 +381,7 @@ class HackleWebViewClient
 
   track(event: HackleEvent) {
     return this.messenger.invoke<void>(
-      "track",
-      { event },
+      { type: "track", payload: { event } },
       { onTimeout: () => undefined }
     );
   }
@@ -383,8 +395,7 @@ class HackleWebViewClient
       typeof WebViewRemoteConfig
     >[0] = (key: string, defaultValue: any, valueType: string) => {
       return this.messenger.invoke<{ configValue: string | number | boolean }>(
-        "remoteConfig",
-        { key, defaultValue, valueType },
+        { type: "remoteConfig", payload: { key, defaultValue, valueType } },
         { onTimeout: () => defaultValue }
       );
     };
@@ -393,21 +404,30 @@ class HackleWebViewClient
   }
 
   showUserExplorer() {
-    return this.messenger.invoke<void>("showUserExplorer", null, {
-      onTimeout: () => undefined,
-    });
+    return this.messenger.invoke<void>(
+      { type: "showUserExplorer", payload: null },
+      {
+        onTimeout: () => undefined,
+      }
+    );
   }
 
   async hideUserExplorer() {
-    return this.messenger.invoke<void>("hideUserExplorer", null, {
-      onTimeout: () => undefined,
-    });
+    return this.messenger.invoke<void>(
+      { type: "hideUserExplorer", payload: null },
+      {
+        onTimeout: () => undefined,
+      }
+    );
   }
 
   fetch() {
-    return this.messenger.invoke<void>("fetch", null, {
-      onTimeout: () => undefined,
-    });
+    return this.messenger.invoke<void>(
+      { type: "fetch", payload: null },
+      {
+        onTimeout: () => undefined,
+      }
+    );
   }
 
   getDisplayedInAppMessage(): Promise<null> {
