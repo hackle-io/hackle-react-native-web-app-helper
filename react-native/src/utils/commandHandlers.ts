@@ -1,4 +1,4 @@
-import { HackleRequest } from '../types';
+import type {HackleRequest} from '../types';
 import { invokeBridgeMapper } from './bridgeInvoker';
 
 /**

@@ -1,5 +1,5 @@
 import { HACKLE_CONSTANTS } from '../constants';
-import { HackleRequest } from '../types';
+import type {HackleRequest} from '../types';
 
 /**
  * Hackle 메시지 이벤트인지 확인하는 함수

@@ -1,4 +1,4 @@
-import { HackleWebviewManagerParams, HackleWebviewManagerReturn } from '../types';
+import type {HackleWebviewManagerParams, HackleWebviewManagerReturn} from '../types';
 import { HACKLE_CONSTANTS } from '../constants';
 import { isHackleMessageEvent, sendMessage, invokeBridge } from '../utils';
 import * as commandHandlers from '../utils/commandHandlers';
