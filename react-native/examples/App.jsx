@@ -11,7 +11,7 @@ import { SafeAreaView, StyleSheet, View, useColorScheme } from "react-native";
 import WebView from "react-native-webview";
 
 import { Colors } from "react-native/Libraries/NewAppScreen";
-import useHackleWebviewManager from "./useHackleWebviewManager";
+import { useHackleWebviewManager } from "@hackler/hackle-react-native-webview-bridge";
 
 const hackleClient = createInstance("SDK_KEY");
 

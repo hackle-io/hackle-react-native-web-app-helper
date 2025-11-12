@@ -1,0 +1,33 @@
+{
+  "name": "@hackler/hackle-react-native-webview-bridge",
+  "version": "0.0.3",
+  "description": "React Native WebView Bridge for Hackle SDK integration",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "files": [
+    "src"
+  ],
+  "keywords": [
+    "hackle",
+    "react-native",
+    "webview",
+    "bridge"
+  ],
+  "author": "Hackle",
+  "license": "MIT",
+  "peerDependencies": {
+    "@hackler/react-native-sdk": ">=3.26.0",
+    "react": "*",
+    "react-native": "*",
+    "react-native-webview": "*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hackle-io/hackle-react-native-web-app-helper.git",
+    "directory": "react-native"
+  },
+  "bugs": {
+    "url": "https://github.com/hackle-io/hackle-react-native-web-app-helper/issues"
+  },
+  "homepage": "https://docs-kr.hackle.io/docs/react-native-web-app-integration/"
+}

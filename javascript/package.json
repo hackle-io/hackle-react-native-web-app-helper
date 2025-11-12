@@ -1,6 +1,6 @@
 {
   "name": "hackle-js-bridge",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "main": "dist/index.esm.min.js",
   "module": "dist/index.esm.min.js",
   "types": "dist/types/index.d.ts",
@@ -24,6 +24,6 @@
     "typescript": "^5.8.3"
   },
   "peerDependencies": {
-    "@hackler/javascript-sdk": "^11.48.0"
+    "@hackler/javascript-sdk": "^11.51.0"
   }
 }
