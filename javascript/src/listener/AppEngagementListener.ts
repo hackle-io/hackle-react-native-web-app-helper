@@ -21,7 +21,6 @@ export class AppEngagementListener implements EngagementListener {
     const event = {
       key: AppEngagementListener.ENGAGEMENT_EVENT_KEY,
       properties: {
-        PAGE_URL: engagement.page.url,
         [AppEngagementListener.ENGAGEMENT_PAGE_NAME_KEY]:
           engagement.page.pageTitle,
         [AppEngagementListener.ENGAGEMENT_TIME_PROPERTY_KEY]:
