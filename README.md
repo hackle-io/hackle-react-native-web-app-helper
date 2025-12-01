@@ -1,7 +1,7 @@
 > **이 저장소는 더 이상 유지보수되지 않습니다.** <br/>
 > **아래 패키지를 이용해주세요.** <br/>
 >
-> ![Static Badge](https://img.shields.io/npm/v/@hackler/react-native-webview-plugin?label=@hackler/react-native-webview-plugin)
+> [![@hackler/react-native-webview-plugin Version](https://img.shields.io/npm/v/@hackler/react-native-webview-plugin?label=@hackler/react-native-webview-plugin)](https://www.npmjs.com/package/@hackler/react-native-webview-plugin)
 
 
 
