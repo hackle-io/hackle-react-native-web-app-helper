@@ -1,3 +1,10 @@
+> **이 저장소는 더 이상 유지보수되지 않습니다.** <br/>
+> **아래 패키지를 이용해주세요.** <br/>
+>
+> ![Static Badge](https://img.shields.io/npm/v/@hackler/react-native-webview-plugin?label=@hackler/react-native-webview-plugin)
+
+
+
 # hackle-react-native-web-app-helper
 
 React Native WebView에서 Hackle을 사용하기 위한 스크립트 입니다.
